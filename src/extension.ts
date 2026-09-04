@@ -38,7 +38,7 @@ export default async function ohMyPiZh(pi: PiExtensionAPI): Promise<void> {
 
   // 1. Eagerly patch classes in the runtime so startup components (welcome, model list) are localized immediately
   if (config.enabled) {
-    void patcher.patchPiTui().catch((err) => {
+    void patcher.patchPiTui(pi).catch((err) => {
       logger.debug(`Initial patchPiTui deferred: ${String(err)}`);
     });
   }
@@ -50,7 +50,7 @@ export default async function ohMyPiZh(pi: PiExtensionAPI): Promise<void> {
       localizer.setDictionary(getTuiDictionary(config.locale, config.customDictionary));
 
       if (config.enabled) {
-        await patcher.patchPiTui();
+        await patcher.patchPiTui(pi);
 
         // Wrap ctx.ui interactive methods
         if (ctx?.ui) {
@@ -90,10 +90,12 @@ export default async function ohMyPiZh(pi: PiExtensionAPI): Promise<void> {
       switch (sub) {
         case "on": {
           config.enabled = true;
-          await patcher.patchPiTui();
+          await patcher.patchPiTui(pi);
           if (ctx?.ui) {
             patcher.wrapExtensionUI(ctx.ui);
-            ctx.ui.setStatus?.("oh-my-pi-zh", "🇨🇳 TUI:中文");
+            if (config.features.statusIndicator) {
+              ctx.ui.setStatus?.("oh-my-pi-zh", "🇨🇳 TUI:中文");
+            }
           }
           const msg = "✅ oh-my-pi TUI 中文汉化已启用";
           ctx?.ui?.notify ? ctx.ui.notify(msg, "info") : console.log(msg);

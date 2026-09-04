@@ -14,7 +14,7 @@ var DEFAULT_CONFIG = {
     translateCategories: true,
     translateTools: true,
     registerCommands: true,
-    statusIndicator: true
+    statusIndicator: false
   }
 };
 
@@ -195,10 +195,12 @@ var tuiZhCN = {
     "Please use nerdfont \u{1F62D}.": "\u8BF7\u4F7F\u7528 Nerd \u5B57\u4F53 \u{1F62D}\u3002",
     // 2. Warnings & System Notices
     "Update Available": "\u53D1\u73B0\u65B0\u7248\u672C",
+    "Run: omp update": "\u8FD0\u884C: omp update",
     "New version of omp is available": "\u53D1\u73B0 omp \u65B0\u7248\u672C\u53EF\u7528",
     "No models available": "\u6CA1\u6709\u53EF\u7528\u6A21\u578B",
     "Warning: No models available": "\u8B66\u544A\uFF1A\u6CA1\u6709\u53EF\u7528\u6A21\u578B",
     "Warning: No models available. Configure a provider using /provider or check your API keys.": "\u8B66\u544A\uFF1A\u6CA1\u6709\u53EF\u7528\u6A21\u578B\u3002\u8BF7\u4F7F\u7528 /provider \u914D\u7F6E\u63D0\u4F9B\u5546\u6216\u68C0\u67E5 API \u5BC6\u94A5\u3002",
+    "Warning: No models available. Use /login or set an API key environment variable. Then use /model to select a model.": "\u8B66\u544A\uFF1A\u6CA1\u6709\u53EF\u7528\u6A21\u578B\u3002\u8BF7\u4F7F\u7528 /login \u767B\u5F55\u6216\u8BBE\u7F6E API \u5BC6\u94A5\u73AF\u5883\u53D8\u91CF\uFF0C\u7136\u540E\u4F7F\u7528 /model \u9009\u62E9\u6A21\u578B\u3002",
     "No models available. Use /login or set an API key environment variable. Then use /model to select a model.": "\u6CA1\u6709\u53EF\u7528\u6A21\u578B\u3002\u8BF7\u4F7F\u7528 /login \u767B\u5F55\u6216\u8BBE\u7F6E API \u5BC6\u94A5\u73AF\u5883\u53D8\u91CF\uFF0C\u7136\u540E\u4F7F\u7528 /model \u9009\u62E9\u6A21\u578B\u3002",
     "No models available. Set API keys in environment variables.": "\u6CA1\u6709\u53EF\u7528\u6A21\u578B\u3002\u8BF7\u5728\u73AF\u5883\u53D8\u91CF\u4E2D\u8BBE\u7F6E\u5BF9\u5E94\u7684 API \u5BC6\u94A5\u3002",
     "Set an API key environment variable:": "\u8BF7\u8BBE\u7F6E\u5BF9\u5E94\u7684 API \u5BC6\u94A5\u73AF\u5883\u53D8\u91CF\uFF1A",
@@ -462,8 +464,16 @@ var tuiZhCN = {
     },
     // New version banner: "New version X is available. Run: omp update"
     {
-      regex: /New version\s+([^\s]+)\s+is available\.\s*Run:\s*(.*)/,
+      regex: /New version\s+([^\s]+)\s+is available\.\s*Run:\s*(.*)/i,
       replacement: "\u53D1\u73B0\u65B0\u7248\u672C $1 \u53EF\u7528\u3002\u8BF7\u8FD0\u884C: $2"
+    },
+    {
+      regex: /New version\s+([^\s]+)\s+is available/i,
+      replacement: "\u53D1\u73B0\u65B0\u7248\u672C $1 \u53EF\u7528"
+    },
+    {
+      regex: /Or create\s+(.*models\.yml)/i,
+      replacement: "\u6216\u521B\u5EFA $1 \u914D\u7F6E\u6587\u4EF6"
     },
     // Model fallback message pattern: "Could not restore model X. Using Y/Z"
     {
@@ -729,12 +739,140 @@ var TuiPatcher = class {
     this.localizer = options.localizer;
   }
   /**
-   * Attempt to dynamically patch @oh-my-pi/pi-tui, @oh-my-pi/pi-coding-agent
-   * and fallback Pi classes in the current runtime environment.
+   * Attempt to dynamically patch host runtime classes and hooks:
+   * 1. Direct host exports on api.pi (WelcomeComponent, renderWelcomeTip, Text, CustomEditor, BorderedLoader)
+   * 2. Universal output streams (process.stdout.write & process.stderr.write)
+   * 3. Fallback dynamic imports for standalone / test environments
    */
-  async patchPiTui() {
+  async patchPiTui(api) {
     if (this.isPatched) return true;
     let patchedAny = false;
+    const localizer = this.localizer;
+    try {
+      if (api?.pi) {
+        const hostPi = api.pi;
+        if (hostPi.WelcomeComponent?.prototype?.render && !this.hasOriginal(hostPi.WelcomeComponent.prototype, "render")) {
+          this.saveOriginal(hostPi.WelcomeComponent.prototype, "render");
+          const origWelcomeRender = hostPi.WelcomeComponent.prototype.render;
+          hostPi.WelcomeComponent.prototype.render = function(termWidth) {
+            const lines = origWelcomeRender.call(this, termWidth);
+            return localizer.localizeLines(lines);
+          };
+          patchedAny = true;
+        }
+        if (typeof hostPi.renderWelcomeTip === "function" && !this.hasOriginal(hostPi, "renderWelcomeTip")) {
+          this.saveOriginal(hostPi, "renderWelcomeTip");
+          const origTip = hostPi.renderWelcomeTip;
+          hostPi.renderWelcomeTip = function(tip, boxWidth, phase = 0) {
+            const localizedTip = localizer.localizeText(tip);
+            return origTip.call(this, localizedTip, boxWidth, phase);
+          };
+          patchedAny = true;
+        }
+        if (hostPi.Text?.prototype?.render && !this.hasOriginal(hostPi.Text.prototype, "render")) {
+          this.saveOriginal(hostPi.Text.prototype, "render");
+          const origTextRender = hostPi.Text.prototype.render;
+          hostPi.Text.prototype.render = function(width) {
+            const lines = origTextRender.call(this, width);
+            return localizer.localizeLines(lines);
+          };
+          patchedAny = true;
+        }
+        if (hostPi.BorderedLoader?.prototype?.render && !this.hasOriginal(hostPi.BorderedLoader.prototype, "render")) {
+          this.saveOriginal(hostPi.BorderedLoader.prototype, "render");
+          const origLoader = hostPi.BorderedLoader.prototype.render;
+          hostPi.BorderedLoader.prototype.render = function(width) {
+            const lines = origLoader.call(this, width);
+            return localizer.localizeLines(lines);
+          };
+          patchedAny = true;
+        }
+        if (hostPi.CustomEditor?.prototype) {
+          const Editor = Object.getPrototypeOf(hostPi.CustomEditor.prototype)?.constructor;
+          if (Editor?.prototype?.setAutocompleteProvider && !this.hasOriginal(Editor.prototype, "setAutocompleteProvider")) {
+            this.saveOriginal(Editor.prototype, "setAutocompleteProvider");
+            const origSetProvider = Editor.prototype.setAutocompleteProvider;
+            Editor.prototype.setAutocompleteProvider = function(provider) {
+              if (provider && typeof provider.getSuggestions === "function") {
+                const origGetSuggestions = provider.getSuggestions;
+                provider.getSuggestions = async function(...args) {
+                  const result = await origGetSuggestions.apply(this, args);
+                  if (result && Array.isArray(result.items)) {
+                    for (const item of result.items) {
+                      if (item && typeof item.description === "string") {
+                        item.description = localizer.localizeText(item.description);
+                      }
+                    }
+                  }
+                  return result;
+                };
+              }
+              return origSetProvider.call(this, provider);
+            };
+            patchedAny = true;
+          }
+        }
+        logger.debug("Patched api.pi host components successfully.");
+      }
+    } catch (err) {
+      logger.warn(`Failed patching api.pi host classes: ${String(err)}`);
+    }
+    try {
+      if (typeof process?.stdout?.write === "function" && !this.hasOriginal(process.stdout, "write")) {
+        this.saveOriginal(process.stdout, "write");
+        const origStdoutWrite = process.stdout.write.bind(process.stdout);
+        const patcherRef = this;
+        process.stdout.write = function(chunk, encodingOrCallback, callback) {
+          if (!patcherRef.isPatched) {
+            return origStdoutWrite(chunk, encodingOrCallback, callback);
+          }
+          if (typeof chunk === "string" && chunk.length > 0) {
+            if (chunk.includes("Welcome back!") || chunk.includes("Tips") || chunk.includes("Tip:") || chunk.includes("No models available") || chunk.includes("Update Available") || chunk.includes("New version") || chunk.includes("LSP Servers") || chunk.includes("Recent sessions") || chunk.includes("for prompt actions") || chunk.includes("for commands") || chunk.includes("to run bash") || chunk.includes("to run python") || chunk.includes("Thinking...")) {
+              const lines = chunk.split("\n");
+              const localized = lines.map((l) => localizer.localizeLine(l)).join("\n");
+              return origStdoutWrite(localized, encodingOrCallback, callback);
+            }
+          } else if (Buffer.isBuffer(chunk) && chunk.length > 0) {
+            const str = chunk.toString("utf8");
+            if (str.includes("Welcome back!") || str.includes("Tips") || str.includes("Tip:") || str.includes("No models available") || str.includes("Update Available") || str.includes("New version") || str.includes("LSP Servers") || str.includes("Recent sessions") || str.includes("for prompt actions") || str.includes("for commands") || str.includes("to run bash") || str.includes("to run python") || str.includes("Thinking...")) {
+              const lines = str.split("\n");
+              const localized = lines.map((l) => localizer.localizeLine(l)).join("\n");
+              return origStdoutWrite(Buffer.from(localized, "utf8"), encodingOrCallback, callback);
+            }
+          }
+          return origStdoutWrite(chunk, encodingOrCallback, callback);
+        };
+        patchedAny = true;
+      }
+      if (typeof process?.stderr?.write === "function" && !this.hasOriginal(process.stderr, "write")) {
+        this.saveOriginal(process.stderr, "write");
+        const origStderrWrite = process.stderr.write.bind(process.stderr);
+        const patcherRef = this;
+        process.stderr.write = function(chunk, encodingOrCallback, callback) {
+          if (!patcherRef.isPatched) {
+            return origStderrWrite(chunk, encodingOrCallback, callback);
+          }
+          if (typeof chunk === "string" && chunk.length > 0) {
+            if (chunk.includes("No models available") || chunk.includes("Update Available") || chunk.includes("API key") || chunk.includes("models.yml") || chunk.includes("Error:")) {
+              const lines = chunk.split("\n");
+              const localized = lines.map((l) => localizer.localizeLine(l)).join("\n");
+              return origStderrWrite(localized, encodingOrCallback, callback);
+            }
+          } else if (Buffer.isBuffer(chunk) && chunk.length > 0) {
+            const str = chunk.toString("utf8");
+            if (str.includes("No models available") || str.includes("Update Available") || str.includes("API key") || str.includes("models.yml") || str.includes("Error:")) {
+              const lines = str.split("\n");
+              const localized = lines.map((l) => localizer.localizeLine(l)).join("\n");
+              return origStderrWrite(Buffer.from(localized, "utf8"), encodingOrCallback, callback);
+            }
+          }
+          return origStderrWrite(chunk, encodingOrCallback, callback);
+        };
+        patchedAny = true;
+      }
+    } catch (err) {
+      logger.warn(`Failed installing stdout/stderr safety net: ${String(err)}`);
+    }
     try {
       let piTui = null;
       try {
@@ -743,16 +881,10 @@ var TuiPatcher = class {
         try {
           piTui = await import("@earendil-works/pi-tui");
         } catch {
-          try {
-            const globalTuiPath = "file:///C:/Users/Xeltra/AppData/Roaming/npm/node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-tui/dist/index.js";
-            piTui = await import(globalTuiPath);
-          } catch {
-          }
         }
       }
       if (piTui) {
-        const localizer = this.localizer;
-        if (piTui.Text?.prototype?.render) {
+        if (piTui.Text?.prototype?.render && !this.hasOriginal(piTui.Text.prototype, "render")) {
           this.saveOriginal(piTui.Text.prototype, "render");
           const origRender = piTui.Text.prototype.render;
           piTui.Text.prototype.render = function(width) {
@@ -761,7 +893,7 @@ var TuiPatcher = class {
           };
           patchedAny = true;
         }
-        if (piTui.SelectList?.prototype?.render) {
+        if (piTui.SelectList?.prototype?.render && !this.hasOriginal(piTui.SelectList.prototype, "render")) {
           this.saveOriginal(piTui.SelectList.prototype, "render");
           const origSelectRender = piTui.SelectList.prototype.render;
           piTui.SelectList.prototype.render = function(width) {
@@ -778,7 +910,7 @@ var TuiPatcher = class {
           };
           patchedAny = true;
         }
-        if (piTui.CombinedAutocompleteProvider?.prototype?.getSuggestions) {
+        if (piTui.CombinedAutocompleteProvider?.prototype?.getSuggestions && !this.hasOriginal(piTui.CombinedAutocompleteProvider.prototype, "getSuggestions")) {
           this.saveOriginal(piTui.CombinedAutocompleteProvider.prototype, "getSuggestions");
           const origGetSuggestions = piTui.CombinedAutocompleteProvider.prototype.getSuggestions;
           piTui.CombinedAutocompleteProvider.prototype.getSuggestions = async function(...args) {
@@ -794,7 +926,7 @@ var TuiPatcher = class {
           };
           patchedAny = true;
         }
-        if (piTui.SettingsList?.prototype?.renderMainList) {
+        if (piTui.SettingsList?.prototype?.renderMainList && !this.hasOriginal(piTui.SettingsList.prototype, "renderMainList")) {
           this.saveOriginal(piTui.SettingsList.prototype, "renderMainList");
           const origSettingsRender = piTui.SettingsList.prototype.renderMainList;
           piTui.SettingsList.prototype.renderMainList = function(width) {
@@ -803,51 +935,10 @@ var TuiPatcher = class {
           };
           patchedAny = true;
         }
-        if (piTui.ProcessTerminal?.prototype?.write) {
-          this.saveOriginal(piTui.ProcessTerminal.prototype, "write");
-          const origWrite = piTui.ProcessTerminal.prototype.write;
-          piTui.ProcessTerminal.prototype.write = function(data) {
-            if (typeof data === "string" && data.length > 0) {
-              if (data.includes("Welcome back!") || data.includes("Tips") || data.includes("LSP Servers") || data.includes("Recent sessions") || data.includes("Tip:") || data.includes("No models available") || data.includes("Update Available")) {
-                const lines = data.split("\n");
-                const localizedLines = localizer.localizeLines(lines);
-                return origWrite.call(this, localizedLines.join("\n"));
-              }
-            }
-            return origWrite.call(this, data);
-          };
-          patchedAny = true;
-        }
         logger.debug("Patched pi-tui classes successfully.");
       }
     } catch (err) {
-      logger.warn(`Failed patching pi-tui: ${String(err)}`);
-    }
-    try {
-      let codingAgent = null;
-      try {
-        codingAgent = await import("@oh-my-pi/pi-coding-agent");
-      } catch {
-        try {
-          codingAgent = await import("@earendil-works/pi-coding-agent");
-        } catch {
-        }
-      }
-      if (codingAgent) {
-        const localizer = this.localizer;
-        if (codingAgent.WelcomeComponent?.prototype?.render) {
-          this.saveOriginal(codingAgent.WelcomeComponent.prototype, "render");
-          const origWelcomeRender = codingAgent.WelcomeComponent.prototype.render;
-          codingAgent.WelcomeComponent.prototype.render = function(termWidth) {
-            const lines = origWelcomeRender.call(this, termWidth);
-            return localizer.localizeLines(lines);
-          };
-          patchedAny = true;
-        }
-        logger.debug("Patched coding-agent components successfully.");
-      }
-    } catch (err) {
-      logger.warn(`Failed patching coding-agent: ${String(err)}`);
+      logger.warn(`Failed fallback patching pi-tui: ${String(err)}`);
     }
     this.isPatched = patchedAny;
     return patchedAny;
@@ -860,37 +951,43 @@ var TuiPatcher = class {
     if (typeof ui.setStatus === "function") {
       const origSetStatus = ui.setStatus.bind(ui);
       ui.setStatus = (key, text) => {
-        if (text) {
-          const localized = this.localizer.localizeText(text);
-          return origSetStatus(key, localized);
+        if (text === void 0) {
+          return origSetStatus(key);
         }
-        return origSetStatus(key, text);
+        const localized = this.localizer.localizeText(text);
+        return origSetStatus(key, localized);
       };
     }
     if (typeof ui.setWorkingMessage === "function") {
-      const origSetWorkingMessage = ui.setWorkingMessage.bind(ui);
-      ui.setWorkingMessage = (msg) => {
-        if (msg) {
-          return origSetWorkingMessage(this.localizer.localizeText(msg));
-        }
-        return origSetWorkingMessage(msg);
-      };
-    }
-    if (typeof ui.setHiddenThinkingLabel === "function") {
-      const origSetHiddenThinking = ui.setHiddenThinkingLabel.bind(ui);
-      ui.setHiddenThinkingLabel = (label) => {
-        if (label) {
-          return origSetHiddenThinking(this.localizer.localizeText(label));
-        }
-        return origSetHiddenThinking(label);
+      const origWorking = ui.setWorkingMessage.bind(ui);
+      ui.setWorkingMessage = (message) => {
+        if (!message) return origWorking();
+        const localized = this.localizer.localizeText(message);
+        return origWorking(localized);
       };
     }
     if (typeof ui.select === "function") {
       const origSelect = ui.select.bind(ui);
       ui.select = async (title, options, opts) => {
         const localizedTitle = this.localizer.localizeText(title);
-        const localizedOptions = options.map((opt) => this.localizer.localizeText(opt));
+        const localizedOptions = options.map((opt) => ({
+          ...opt,
+          label: this.localizer.localizeText(opt.label),
+          description: opt.description ? this.localizer.localizeText(opt.description) : opt.description
+        }));
         return origSelect(localizedTitle, localizedOptions, opts);
+      };
+    }
+    if (typeof ui.multiSelect === "function") {
+      const origMulti = ui.multiSelect.bind(ui);
+      ui.multiSelect = async (title, options, opts) => {
+        const localizedTitle = this.localizer.localizeText(title);
+        const localizedOptions = options.map((opt) => ({
+          ...opt,
+          label: this.localizer.localizeText(opt.label),
+          description: opt.description ? this.localizer.localizeText(opt.description) : opt.description
+        }));
+        return origMulti(localizedTitle, localizedOptions, opts);
       };
     }
     if (typeof ui.confirm === "function") {
@@ -929,6 +1026,9 @@ var TuiPatcher = class {
     this.originalMethods.clear();
     this.isPatched = false;
   }
+  hasOriginal(target, prop) {
+    return Boolean(this.originalMethods.get(target)?.has(prop));
+  }
   saveOriginal(target, prop) {
     if (!this.originalMethods.has(target)) {
       this.originalMethods.set(target, /* @__PURE__ */ new Map());
@@ -948,7 +1048,7 @@ async function ohMyPiZh(pi) {
   const patcher = new TuiPatcher({ localizer });
   logger.debug("oh-my-pi-zh TUI extension initializing...");
   if (config.enabled) {
-    void patcher.patchPiTui().catch((err) => {
+    void patcher.patchPiTui(pi).catch((err) => {
       logger.debug(`Initial patchPiTui deferred: ${String(err)}`);
     });
   }
@@ -957,7 +1057,7 @@ async function ohMyPiZh(pi) {
       config = loadConfig(ctx?.cwd || process.cwd());
       localizer.setDictionary(getTuiDictionary(config.locale, config.customDictionary));
       if (config.enabled) {
-        await patcher.patchPiTui();
+        await patcher.patchPiTui(pi);
         if (ctx?.ui) {
           patcher.wrapExtensionUI(ctx.ui);
           if (config.features.statusIndicator && typeof ctx.ui.setStatus === "function") {
@@ -987,10 +1087,12 @@ async function ohMyPiZh(pi) {
       switch (sub) {
         case "on": {
           config.enabled = true;
-          await patcher.patchPiTui();
+          await patcher.patchPiTui(pi);
           if (ctx?.ui) {
             patcher.wrapExtensionUI(ctx.ui);
-            ctx.ui.setStatus?.("oh-my-pi-zh", "\u{1F1E8}\u{1F1F3} TUI:\u4E2D\u6587");
+            if (config.features.statusIndicator) {
+              ctx.ui.setStatus?.("oh-my-pi-zh", "\u{1F1E8}\u{1F1F3} TUI:\u4E2D\u6587");
+            }
           }
           const msg = "\u2705 oh-my-pi TUI \u4E2D\u6587\u6C49\u5316\u5DF2\u542F\u7528";
           ctx?.ui?.notify ? ctx.ui.notify(msg, "info") : console.log(msg);

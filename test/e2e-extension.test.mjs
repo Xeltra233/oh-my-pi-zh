@@ -73,8 +73,8 @@ test("E2E Pi extension lifecycle and slash command execution", async () => {
     await hook({}, mockCtx);
   }
 
-  // Verify status indicator
-  assert.equal(statusItems.get("oh-my-pi-zh"), "🇨🇳 TUI:中文");
+  // Verify status indicator is not permanently shown by default
+  assert.equal(statusItems.has("oh-my-pi-zh"), false, "Should not show status indicator by default");
 
   // Verify setStatus translation on third-party indicators (oh-my-pi)
   mockCtx.ui.setStatus("oh-my-pi", "oh-my-pi: 5 agents, 3 skills");
@@ -101,7 +101,6 @@ test("E2E Pi extension lifecycle and slash command execution", async () => {
   // 6. Test slash command /zh on (Re-enable)
   await zhCmd.handler("on", mockCtx);
   assert.ok(latestNotification.includes("已启用"));
-  assert.equal(statusItems.get("oh-my-pi-zh"), "🇨🇳 TUI:中文");
 
   // 7. Simulate session_shutdown
   const shutdownHooks = eventHandlers.get("session_shutdown");

@@ -10,6 +10,6 @@ export const DEFAULT_CONFIG: OhMyPiZhConfig = {
     translateCategories: true,
     translateTools: true,
     registerCommands: true,
-    statusIndicator: true
+    statusIndicator: false
   }
 };

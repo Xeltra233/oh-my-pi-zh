@@ -23,11 +23,14 @@ export const tuiZhCN: TuiDictionary = {
 
     // 2. Warnings & System Notices
     "Update Available": "发现新版本",
+    "Run: omp update": "运行: omp update",
     "New version of omp is available": "发现 omp 新版本可用",
     "No models available": "没有可用模型",
     "Warning: No models available": "警告：没有可用模型",
     "Warning: No models available. Configure a provider using /provider or check your API keys.":
       "警告：没有可用模型。请使用 /provider 配置提供商或检查 API 密钥。",
+    "Warning: No models available. Use /login or set an API key environment variable. Then use /model to select a model.":
+      "警告：没有可用模型。请使用 /login 登录或设置 API 密钥环境变量，然后使用 /model 选择模型。",
     "No models available. Use /login or set an API key environment variable. Then use /model to select a model.":
       "没有可用模型。请使用 /login 登录或设置 API 密钥环境变量，然后使用 /model 选择模型。",
     "No models available. Set API keys in environment variables.":
@@ -307,8 +310,16 @@ export const tuiZhCN: TuiDictionary = {
     },
     // New version banner: "New version X is available. Run: omp update"
     {
-      regex: /New version\s+([^\s]+)\s+is available\.\s*Run:\s*(.*)/,
+      regex: /New version\s+([^\s]+)\s+is available\.\s*Run:\s*(.*)/i,
       replacement: "发现新版本 $1 可用。请运行: $2"
+    },
+    {
+      regex: /New version\s+([^\s]+)\s+is available/i,
+      replacement: "发现新版本 $1 可用"
+    },
+    {
+      regex: /Or create\s+(.*models\.yml)/i,
+      replacement: "或创建 $1 配置文件"
     },
     // Model fallback message pattern: "Could not restore model X. Using Y/Z"
     {
