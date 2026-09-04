@@ -11,8 +11,6 @@
   },
   "files": [
     "dist/",
-    "skills/",
-    "prompts/",
     "README.md",
     "LICENSE"
   ],
@@ -33,12 +31,6 @@
   "pi": {
     "extensions": [
       "./dist/extension.js"
-    ],
-    "skills": [
-      "./skills/"
-    ],
-    "prompts": [
-      "./prompts/"
     ]
   },
   "peerDependencies": {
@@ -46,7 +38,7 @@
   },
   "scripts": {
     "build": "node scripts/build.js",
-    "test": "node --test test/**/*.test.js test/**/*.test.mjs"
+    "test": "node --test"
   },
   "engines": {
     "node": ">=22.19.0"
