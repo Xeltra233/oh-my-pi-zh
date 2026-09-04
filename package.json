@@ -11,6 +11,7 @@
   },
   "files": [
     "dist/",
+    "bin/",
     "README.md",
     "LICENSE"
   ],
@@ -19,6 +20,7 @@
     "url": "git+https://github.com/Xeltra233/oh-my-pi-zh.git"
   },
   "keywords": [
+    "pi-package",
     "pi",
     "pi-agent",
     "coding-agent",
