@@ -24,10 +24,26 @@ test("E2E Pi extension lifecycle and slash command execution", async () => {
   // 1. Initialize extension
   await ohMyPiZh(mockPi);
 
+  assert.ok(commands.has("zh"), "Should register primary /zh shortcut");
   assert.ok(commands.has("oh-my-pi-zh"), "Should register /oh-my-pi-zh command");
   assert.ok(commands.has("omp-zh"), "Should register /omp-zh shortcut alias");
   assert.ok(eventHandlers.has("session_start"), "Should register session_start hook");
   assert.ok(eventHandlers.has("session_shutdown"), "Should register session_shutdown hook");
+
+  // Verify getArgumentCompletions on /zh
+  const zhCmd = commands.get("zh");
+  assert.ok(typeof zhCmd.getArgumentCompletions === "function", "Should provide argument completions");
+  const completions = await zhCmd.getArgumentCompletions("");
+  assert.equal(completions.length, 4);
+  assert.ok(completions.some((c) => c.value === "status" && c.description.includes("状态")));
+  assert.ok(completions.some((c) => c.value === "on" && c.description.includes("启用")));
+  assert.ok(completions.some((c) => c.value === "off" && c.description.includes("停用")));
+  assert.ok(completions.some((c) => c.value === "doctor" && c.description.includes("诊断")));
+
+  // Filtered completions: "d" -> "doctor"
+  const filteredDoc = await zhCmd.getArgumentCompletions("d");
+  assert.equal(filteredDoc.length, 1);
+  assert.equal(filteredDoc[0].value, "doctor");
 
   // 2. Simulate session_start with mock ctx.ui
   const statusItems = new Map();
@@ -68,23 +84,22 @@ test("E2E Pi extension lifecycle and slash command execution", async () => {
   mockCtx.ui.setWorkingMessage("Thinking...");
   assert.equal(mockCtx.ui.workingMessage, "正在深度思考...");
 
-  // 3. Test slash command /oh-my-pi-zh status
-  const cmd = commands.get("oh-my-pi-zh");
-  await cmd.handler("status", mockCtx);
+  // 3. Test slash command /zh status
+  await zhCmd.handler("status", mockCtx);
   assert.ok(latestNotification.includes("TUI 终端汉化状态: 已开启"));
 
-  // 4. Test slash command /oh-my-pi-zh doctor
-  await cmd.handler("doctor", mockCtx);
+  // 4. Test slash command /zh doctor
+  await zhCmd.handler("doctor", mockCtx);
   assert.ok(latestNotification.includes("体检诊断报告"));
   assert.ok(latestNotification.includes("已启用"));
 
-  // 5. Test slash command /oh-my-pi-zh off (Disable)
-  await cmd.handler("off", mockCtx);
+  // 5. Test slash command /zh off (Disable)
+  await zhCmd.handler("off", mockCtx);
   assert.ok(latestNotification.includes("已停用"));
   assert.equal(statusItems.has("oh-my-pi-zh"), false);
 
-  // 6. Test slash command /oh-my-pi-zh on (Re-enable)
-  await cmd.handler("on", mockCtx);
+  // 6. Test slash command /zh on (Re-enable)
+  await zhCmd.handler("on", mockCtx);
   assert.ok(latestNotification.includes("已启用"));
   assert.equal(statusItems.get("oh-my-pi-zh"), "🇨🇳 TUI:中文");
 

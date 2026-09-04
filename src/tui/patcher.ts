@@ -15,23 +15,25 @@ export class TuiPatcher {
   }
 
   /**
-   * Attempt to dynamically patch @earendil-works/pi-tui classes
+   * Attempt to dynamically patch @oh-my-pi/pi-tui, @oh-my-pi/pi-coding-agent
+   * and fallback Pi classes in the current runtime environment.
    */
   async patchPiTui(): Promise<boolean> {
     if (this.isPatched) return true;
 
+    let patchedAny = false;
+
+    // 1. Patch pi-tui classes
     try {
       let piTui: any = null;
 
-      // 1. Try @oh-my-pi/pi-tui (oh-my-pi runtime)
+      // Try @oh-my-pi/pi-tui first, then fallbacks
       try {
         piTui = await import("@oh-my-pi/pi-tui");
       } catch {
-        // 2. Try @earendil-works/pi-tui (standard Pi runtime)
         try {
           piTui = await import("@earendil-works/pi-tui");
         } catch {
-          // 3. Try global node_modules fallback for development/testing
           try {
             const globalTuiPath = "file:///C:/Users/Xeltra/AppData/Roaming/npm/node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-tui/dist/index.js";
             piTui = await import(globalTuiPath);
@@ -41,66 +43,143 @@ export class TuiPatcher {
         }
       }
 
-      if (!piTui) {
-        logger.debug("pi-tui not found in current environment, skipping class patching.");
-        return false;
-      }
-
-      // Patch Text.prototype.render
-      if (piTui.Text?.prototype?.render) {
-        this.saveOriginal(piTui.Text.prototype, "render");
-        const origRender = piTui.Text.prototype.render;
+      if (piTui) {
         const localizer = this.localizer;
 
-        piTui.Text.prototype.render = function (width: number) {
-          const lines = origRender.call(this, width);
-          return localizer.localizeLines(lines);
-        };
+        // 1.1 Patch Text.prototype.render
+        if (piTui.Text?.prototype?.render) {
+          this.saveOriginal(piTui.Text.prototype, "render");
+          const origRender = piTui.Text.prototype.render;
+
+          piTui.Text.prototype.render = function (width: number) {
+            const lines = origRender.call(this, width);
+            return localizer.localizeLines(lines);
+          };
+          patchedAny = true;
+        }
+
+        // 1.2 Patch SelectList.prototype.render (Localize item descriptions and rendered rows)
+        if (piTui.SelectList?.prototype?.render) {
+          this.saveOriginal(piTui.SelectList.prototype, "render");
+          const origSelectRender = piTui.SelectList.prototype.render;
+
+          piTui.SelectList.prototype.render = function (width: number) {
+            // Localize descriptions on items data source so internal width/wrapping is native
+            const items = (this as any).items;
+            if (Array.isArray(items)) {
+              for (const item of items) {
+                if (item && typeof item.description === "string") {
+                  item.description = localizer.localizeText(item.description);
+                }
+              }
+            }
+
+            const lines = origSelectRender.call(this, width);
+            return localizer.localizeLines(lines);
+          };
+          patchedAny = true;
+        }
+
+        // 1.3 Patch CombinedAutocompleteProvider.prototype.getSuggestions
+        if (piTui.CombinedAutocompleteProvider?.prototype?.getSuggestions) {
+          this.saveOriginal(piTui.CombinedAutocompleteProvider.prototype, "getSuggestions");
+          const origGetSuggestions = piTui.CombinedAutocompleteProvider.prototype.getSuggestions;
+
+          piTui.CombinedAutocompleteProvider.prototype.getSuggestions = async function (...args: any[]) {
+            const result = await origGetSuggestions.apply(this, args);
+            if (result && Array.isArray(result.items)) {
+              for (const item of result.items) {
+                if (item && typeof item.description === "string") {
+                  item.description = localizer.localizeText(item.description);
+                }
+              }
+            }
+            return result;
+          };
+          patchedAny = true;
+        }
+
+        // 1.4 Patch SettingsList.prototype.renderMainList
+        if (piTui.SettingsList?.prototype?.renderMainList) {
+          this.saveOriginal(piTui.SettingsList.prototype, "renderMainList");
+          const origSettingsRender = piTui.SettingsList.prototype.renderMainList;
+
+          piTui.SettingsList.prototype.renderMainList = function (width: number) {
+            const lines = origSettingsRender.call(this, width);
+            return localizer.localizeLines(lines);
+          };
+          patchedAny = true;
+        }
+
+        // 1.5 Patch ProcessTerminal.prototype.write (Safety net for unhooked terminal lines)
+        if (piTui.ProcessTerminal?.prototype?.write) {
+          this.saveOriginal(piTui.ProcessTerminal.prototype, "write");
+          const origWrite = piTui.ProcessTerminal.prototype.write;
+
+          piTui.ProcessTerminal.prototype.write = function (data: string) {
+            if (typeof data === "string" && data.length > 0) {
+              // Only process when terminal write contains notable TUI markers to preserve maximum throughput
+              if (
+                data.includes("Welcome back!") ||
+                data.includes("Tips") ||
+                data.includes("LSP Servers") ||
+                data.includes("Recent sessions") ||
+                data.includes("Tip:") ||
+                data.includes("No models available") ||
+                data.includes("Update Available")
+              ) {
+                const lines = data.split("\n");
+                const localizedLines = localizer.localizeLines(lines);
+                return origWrite.call(this, localizedLines.join("\n"));
+              }
+            }
+            return origWrite.call(this, data);
+          };
+          patchedAny = true;
+        }
+
+        logger.debug("Patched pi-tui classes successfully.");
       }
-
-      // Patch TuiMainScreen.prototype.doRender
-      if (piTui.TuiMainScreen?.prototype?.doRender) {
-        this.saveOriginal(piTui.TuiMainScreen.prototype, "doRender");
-        const origDoRender = piTui.TuiMainScreen.prototype.doRender;
-        const localizer = this.localizer;
-
-        piTui.TuiMainScreen.prototype.doRender = function () {
-          // Intercept terminal.write or lines if available
-          return origDoRender.call(this);
-        };
-      }
-
-      // Patch SelectList.prototype.render
-      if (piTui.SelectList?.prototype?.render) {
-        this.saveOriginal(piTui.SelectList.prototype, "render");
-        const origSelectRender = piTui.SelectList.prototype.render;
-        const localizer = this.localizer;
-
-        piTui.SelectList.prototype.render = function (width: number) {
-          const lines = origSelectRender.call(this, width);
-          return localizer.localizeLines(lines);
-        };
-      }
-
-      // Patch SettingsList.prototype.renderMainList
-      if (piTui.SettingsList?.prototype?.renderMainList) {
-        this.saveOriginal(piTui.SettingsList.prototype, "renderMainList");
-        const origSettingsRender = piTui.SettingsList.prototype.renderMainList;
-        const localizer = this.localizer;
-
-        piTui.SettingsList.prototype.renderMainList = function (width: number) {
-          const lines = origSettingsRender.call(this, width);
-          return localizer.localizeLines(lines);
-        };
-      }
-
-      this.isPatched = true;
-      logger.info("Successfully patched pi-tui components with Chinese localization.");
-      return true;
     } catch (err) {
-      logger.warn(`Failed to patch pi-tui: ${String(err)}`);
-      return false;
+      logger.warn(`Failed patching pi-tui: ${String(err)}`);
     }
+
+    // 2. Patch coding-agent components (WelcomeComponent, etc.) if available
+    try {
+      let codingAgent: any = null;
+      try {
+        codingAgent = await import("@oh-my-pi/pi-coding-agent");
+      } catch {
+        try {
+          codingAgent = await import("@earendil-works/pi-coding-agent");
+        } catch {
+          // coding-agent not directly importable outside bundled binary
+        }
+      }
+
+      if (codingAgent) {
+        const localizer = this.localizer;
+
+        // 2.1 Patch WelcomeComponent.prototype.render
+        if (codingAgent.WelcomeComponent?.prototype?.render) {
+          this.saveOriginal(codingAgent.WelcomeComponent.prototype, "render");
+          const origWelcomeRender = codingAgent.WelcomeComponent.prototype.render;
+
+          codingAgent.WelcomeComponent.prototype.render = function (termWidth: number) {
+            const lines = origWelcomeRender.call(this, termWidth);
+            return localizer.localizeLines(lines as string[]);
+          };
+          patchedAny = true;
+        }
+
+        logger.debug("Patched coding-agent components successfully.");
+      }
+    } catch (err) {
+      logger.warn(`Failed patching coding-agent: ${String(err)}`);
+    }
+
+    this.isPatched = patchedAny;
+    return patchedAny;
   }
 
   /**

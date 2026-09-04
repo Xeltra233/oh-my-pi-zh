@@ -6,7 +6,10 @@
 
 ## 🌟 核心特性
 
-- 🎯 **聚焦终端 TUI 交互体验**：全面汉化终端底部状态栏（Footer）、常用快捷键提示（Keybinding hints）、命令与设置列表（SelectList / SettingsList）、加载与深度思考指示器、工具调用与执行反馈（执行耗时、改动行数等）、弹窗对话框以及 oh-my-pi 专属状态指示器。
+- 🎯 **聚焦终端 TUI 交互体验**：全方位汉化 Oh My Pi (`omp`) 终端界面：
+  - **开屏卡片（Welcome Screen）**：`Welcome back!`、`Tips` 技巧说明、`LSP Servers` 语言服务器、`Recent sessions` 最近历史会话等，严格保全制表符等宽对齐；
+  - **命令自动补全（Autocomplete Descriptions）**：按下 `/` 时所有内置命令与子命令的英文功能说明全部中文化呈现；
+  - **交互面板与状态栏**：底部状态栏（Footer）、常用快捷键提示（Keybinding hints）、设置菜单（SettingsList）、加载与深度思考指示器、工具调用与执行反馈（执行耗时、改动行数等）、弹窗对话框以及 oh-my-pi 专属状态指示器；
 - 🛡️ **纯外挂零侵入**：不修改 `oh-my-pi` 或 Pi 原生源码，通过生命周期钩子、组件拦截与 `ctx.ui` 代理实现纯运行时汉化。
 - 🧠 **绝对保全模型推理**：不修改、不翻译智能体底层的英文工程提示词（System Prompt）与技能代码（Skills），保证 LLM 逻辑完整性与代码生成质量不受任何损耗。
 - 🎨 **ANSI 样式安全保全**：内置基于词界的 ANSI-safe 替换引擎，在汉化文本的同时原样保留终端所有色彩与样式转义符。
@@ -80,10 +83,11 @@ npx oh-my-pi-zh remove
 
 | 命令 | 说明 |
 | :--- | :--- |
-| `/oh-my-pi-zh status` 或 `/omp-zh status` | 查看当前 TUI 汉化开启状态与语言版本 |
-| `/oh-my-pi-zh on` | 立即激活终端 TUI 汉化并显示中文状态栏指示器 |
-| `/oh-my-pi-zh off` | 立即停用汉化，无缝恢复英文原生界面 |
-| `/oh-my-pi-zh doctor` | 输出当前插件运行时与界面状态诊断报告 |
+| `/zh` 或 `/zh status` | 查看当前 TUI 汉化开启状态与语言版本（超短易输） |
+| `/zh on` | 立即激活终端 TUI 汉化并显示中文状态栏指示器 |
+| `/zh off` | 立即停用汉化，无缝恢复英文原生界面 |
+| `/zh doctor` | 输出当前插件运行时与界面状态诊断报告 |
+| `/omp-zh` 或 `/oh-my-pi-zh` | 兼容长别名，支持相同子命令与参数自动补全 |
 
 ---
 

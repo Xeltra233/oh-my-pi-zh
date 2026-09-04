@@ -1,6 +1,6 @@
 {
   "name": "oh-my-pi-zh",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Chinese TUI localization plugin for oh-my-pi (omp) — non-intrusive runtime UI localization",
   "license": "MIT",
   "author": "Xeltra233",
@@ -64,7 +64,7 @@
   },
   "scripts": {
     "build": "node scripts/build.js",
-    "test": "node --test"
+    "test": "node --test test/*.test.mjs"
   },
   "engines": {
     "node": ">=22.19.0"
