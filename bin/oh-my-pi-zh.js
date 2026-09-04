@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, readFileSync, writeFileSync, copyFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, copyFileSync, mkdirSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -201,6 +201,40 @@ switch (command) {
     break;
   }
 
+  case "enable":
+  case "on": {
+    const configPath = join(homedir(), ".omp", "oh-my-pi-zh.json");
+    let current = {};
+    if (existsSync(configPath)) {
+      try {
+        current = JSON.parse(readFileSync(configPath, "utf-8"));
+      } catch {}
+    }
+    current.enabled = true;
+    const dir = dirname(configPath);
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    writeFileSync(configPath, JSON.stringify(current, null, 2) + "\n", "utf-8");
+    console.log(`✅ 已启用 oh-my-pi-zh 汉化，配置已写入: ${configPath}`);
+    break;
+  }
+
+  case "disable":
+  case "off": {
+    const configPath = join(homedir(), ".omp", "oh-my-pi-zh.json");
+    let current = {};
+    if (existsSync(configPath)) {
+      try {
+        current = JSON.parse(readFileSync(configPath, "utf-8"));
+      } catch {}
+    }
+    current.enabled = false;
+    const dir = dirname(configPath);
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    writeFileSync(configPath, JSON.stringify(current, null, 2) + "\n", "utf-8");
+    console.log(`⚪ 已停用 oh-my-pi-zh 汉化并恢复英文原生界面，配置已写入: ${configPath}`);
+    break;
+  }
+
   case "help":
   default: {
     console.log(`
@@ -212,6 +246,8 @@ oh-my-pi-zh CLI 命令行管理工具
 常用命令:
   install [source]    为 Oh My Pi (omp) 安装本插件
   remove              从 Oh My Pi 卸载本插件并恢复英文原生界面
+  enable / on         持久化启用终端中文汉化
+  disable / off       持久化停用汉化并恢复原生英文
   status              查看当前安装状态
   doctor              运行环境与配置健康体检诊断
 `);

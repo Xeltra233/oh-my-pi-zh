@@ -1,6 +1,6 @@
 // src/config/loader.ts
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { join, dirname } from "node:path";
 import { homedir } from "node:os";
 
 // src/config/defaults.ts
@@ -110,17 +110,81 @@ function safeReadJsonc(filePath) {
     return null;
   }
 }
+function getGlobalConfigPaths() {
+  const home = process.env.HOME || homedir();
+  return [
+    join(home, ".omp", "oh-my-pi-zh.jsonc"),
+    join(home, ".omp", "oh-my-pi-zh.json"),
+    join(home, ".pi", "oh-my-pi-zh.jsonc"),
+    join(home, ".pi", "oh-my-pi-zh.json")
+  ];
+}
+function findExistingConfigFile(cwd = process.cwd()) {
+  const projectPaths = [
+    join(cwd, ".oh-my-pi-zh.jsonc"),
+    join(cwd, ".oh-my-pi-zh.json")
+  ];
+  for (const p of projectPaths) {
+    if (existsSync(p)) return p;
+  }
+  for (const p of getGlobalConfigPaths()) {
+    if (existsSync(p)) return p;
+  }
+  return null;
+}
+function getDefaultConfigWritePath() {
+  const home = process.env.HOME || homedir();
+  const existing = findExistingConfigFile();
+  if (existing) return existing;
+  const ompDir = join(home, ".omp");
+  if (existsSync(ompDir)) {
+    return join(ompDir, "oh-my-pi-zh.json");
+  }
+  const piDir = join(home, ".pi");
+  if (existsSync(piDir)) {
+    return join(piDir, "oh-my-pi-zh.json");
+  }
+  return join(ompDir, "oh-my-pi-zh.json");
+}
+function saveUserConfig(updates, targetPath) {
+  try {
+    const filePath = targetPath || getDefaultConfigWritePath();
+    const dir = dirname(filePath);
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true });
+    }
+    let current = {};
+    if (existsSync(filePath)) {
+      try {
+        current = parseJsonc(readFileSync(filePath, "utf-8")) || {};
+      } catch {
+        current = {};
+      }
+    }
+    const nextConfig = {
+      ...current,
+      ...updates,
+      ...updates.features ? {
+        features: {
+          ...current.features || {},
+          ...updates.features
+        }
+      } : {}
+    };
+    writeFileSync(filePath, JSON.stringify(nextConfig, null, 2) + "\n", "utf-8");
+    logger.info(`Persisted user config to ${filePath}`);
+    return true;
+  } catch (err) {
+    logger.warn(`Failed to save config: ${String(err)}`);
+    return false;
+  }
+}
 function loadConfig(cwd = process.cwd()) {
   let merged = {
     ...DEFAULT_CONFIG,
     features: { ...DEFAULT_CONFIG.features }
   };
-  const home = process.env.HOME || homedir();
-  const globalPaths = [
-    join(home, ".pi", "oh-my-pi-zh.jsonc"),
-    join(home, ".pi", "oh-my-pi-zh.json")
-  ];
-  for (const p of globalPaths) {
+  for (const p of getGlobalConfigPaths()) {
     const data = safeReadJsonc(p);
     if (data) {
       merged = mergeConfig(merged, data);
@@ -733,11 +797,12 @@ var TuiTextLocalizer = class {
 // src/tui/patcher.ts
 var TuiPatcher = class {
   localizer;
-  isPatched = true;
+  isPatched = false;
   originalMethods = /* @__PURE__ */ new Map();
   trackedAutocompleteItems = /* @__PURE__ */ new Set();
   constructor(options) {
     this.localizer = options.localizer;
+    this.isPatched = options.enabled ?? true;
   }
   /**
    * Attempt to dynamically patch host runtime classes and hooks:
@@ -1097,7 +1162,7 @@ async function ohMyPiZh(pi) {
   let config = loadConfig();
   const dict = getTuiDictionary(config.locale, config.customDictionary);
   const localizer = new TuiTextLocalizer(dict);
-  const patcher = new TuiPatcher({ localizer });
+  const patcher = new TuiPatcher({ localizer, enabled: config.enabled });
   logger.debug("oh-my-pi-zh TUI extension initializing...");
   if (config.enabled) {
     void patcher.patchPiTui(pi).catch((err) => {
@@ -1116,6 +1181,11 @@ async function ohMyPiZh(pi) {
             ctx.ui.setStatus("oh-my-pi-zh", "\u{1F1E8}\u{1F1F3} TUI:\u4E2D\u6587");
           }
         }
+      } else {
+        patcher.restore();
+        if (ctx?.ui) {
+          ctx.ui.setStatus?.("oh-my-pi-zh", void 0);
+        }
       }
     } catch (err) {
       logger.warn(`Failed in session_start: ${String(err)}`);
@@ -1123,7 +1193,7 @@ async function ohMyPiZh(pi) {
   });
   if (typeof pi.registerMarkdownTransformer === "function") {
     pi.registerMarkdownTransformer((markdown, { isStreaming }) => {
-      if (!config.enabled) return markdown;
+      if (!config.enabled || !patcher.isPatched) return markdown;
       if (isStreaming) return markdown;
       return localizer.localizeText(markdown);
     });
@@ -1139,6 +1209,7 @@ async function ohMyPiZh(pi) {
       switch (sub) {
         case "on": {
           config.enabled = true;
+          saveUserConfig({ enabled: true });
           await patcher.patchPiTui(pi);
           if (ctx?.ui) {
             patcher.wrapExtensionUI(ctx.ui);
@@ -1146,17 +1217,18 @@ async function ohMyPiZh(pi) {
               ctx.ui.setStatus?.("oh-my-pi-zh", "\u{1F1E8}\u{1F1F3} TUI:\u4E2D\u6587");
             }
           }
-          const msg = "\u2705 oh-my-pi TUI \u4E2D\u6587\u6C49\u5316\u5DF2\u542F\u7528";
+          const msg = "\u2705 oh-my-pi TUI \u4E2D\u6587\u6C49\u5316\u5DF2\u542F\u7528\uFF08\u8BBE\u7F6E\u5DF2\u4FDD\u5B58\uFF0C\u91CD\u542F\u751F\u6548\uFF09";
           ctx?.ui?.notify ? ctx.ui.notify(msg, "info") : console.log(msg);
           break;
         }
         case "off": {
           config.enabled = false;
+          saveUserConfig({ enabled: false });
           patcher.restore();
           if (ctx?.ui) {
             ctx.ui.setStatus?.("oh-my-pi-zh", void 0);
           }
-          const msg = "\u26AA oh-my-pi TUI \u6C49\u5316\u5DF2\u505C\u7528\uFF0C\u6062\u590D\u82F1\u6587\u539F\u751F\u754C\u9762";
+          const msg = "\u26AA oh-my-pi TUI \u6C49\u5316\u5DF2\u505C\u7528\uFF0C\u6062\u590D\u82F1\u6587\u539F\u751F\u754C\u9762\uFF08\u8BBE\u7F6E\u5DF2\u4FDD\u5B58\uFF0C\u91CD\u542F\u751F\u6548\uFF09";
           ctx?.ui?.notify ? ctx.ui.notify(msg, "info") : console.log(msg);
           break;
         }
@@ -1169,7 +1241,7 @@ async function ohMyPiZh(pi) {
             `- **\u72B6\u6001\u680F\u6307\u793A\u5668**: ${config.features.statusIndicator ? "\u5DF2\u6FC0\u6D3B" : "\u672A\u6FC0\u6D3B"}`,
             `- **Markdown \u53D8\u6362\u5668**: ${typeof pi.registerMarkdownTransformer === "function" ? "\u5DF2\u5C31\u7EEA" : "\u672A\u63D0\u4F9B"}`,
             "",
-            "\u{1F4A1} \u63D0\u793A\uFF1A\u53EF\u901A\u8FC7 `/zh on` \u6216 `/zh off` \u968F\u65F6\u65E0\u7F1D\u5207\u6362\u4E2D\u82F1\u6587\u7EC8\u7AEF\u754C\u9762\u3002"
+            "\u{1F4A1} \u63D0\u793A\uFF1A\u53EF\u901A\u8FC7 `/zh on` \u6216 `/zh off` \u968F\u65F6\u65E0\u7F1D\u5207\u6362\u4E2D\u82F1\u6587\u7EC8\u7AEF\u754C\u9762\uFF0C\u5207\u6362\u540E\u72B6\u6001\u4F1A\u81EA\u52A8\u6301\u4E45\u5316\u4FDD\u5B58\u3002"
           ];
           const report = lines.join("\n");
           ctx?.ui?.notify ? ctx.ui.notify(report, "info") : console.log(report);
@@ -1186,8 +1258,8 @@ async function ohMyPiZh(pi) {
     const getArgumentCompletions = async (prefix) => {
       const subcommands = [
         { value: "status", label: "status", description: "\u67E5\u770B\u5F53\u524D\u7EC8\u7AEF TUI \u6C49\u5316\u72B6\u6001" },
-        { value: "on", label: "on", description: "\u7ACB\u5373\u542F\u7528\u7EC8\u7AEF TUI \u4E2D\u6587\u6C49\u5316" },
-        { value: "off", label: "off", description: "\u505C\u7528\u6C49\u5316\u5E76\u6062\u590D\u82F1\u6587\u539F\u751F\u754C\u9762" },
+        { value: "on", label: "on", description: "\u7ACB\u5373\u542F\u7528\u7EC8\u7AEF TUI \u4E2D\u6587\u6C49\u5316\uFF08\u6301\u4E45\u5316\u4FDD\u5B58\uFF09" },
+        { value: "off", label: "off", description: "\u505C\u7528\u6C49\u5316\u5E76\u6062\u590D\u82F1\u6587\u539F\u751F\u754C\u9762\uFF08\u6301\u4E45\u5316\u4FDD\u5B58\uFF09" },
         { value: "doctor", label: "doctor", description: "\u6267\u884C TUI \u6C49\u5316\u8BCA\u65AD\u4E0E\u4F53\u68C0" }
       ];
       const p = (prefix || "").toLowerCase().trim();

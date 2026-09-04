@@ -3,16 +3,18 @@ import { logger } from "../shared/logger.js";
 
 export interface PatcherOptions {
   localizer: TuiTextLocalizer;
+  enabled?: boolean;
 }
 
 export class TuiPatcher {
   private localizer: TuiTextLocalizer;
-  public isPatched = true;
+  public isPatched = false;
   private originalMethods: Map<any, Map<string, any>> = new Map();
   private trackedAutocompleteItems: Set<any> = new Set();
 
   constructor(options: PatcherOptions) {
     this.localizer = options.localizer;
+    this.isPatched = options.enabled ?? true;
   }
 
   /**

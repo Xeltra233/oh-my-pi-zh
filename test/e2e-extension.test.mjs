@@ -1,8 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { existsSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
+import { join } from "node:path";
+import { homedir } from "node:os";
 import ohMyPiZh from "../dist/extension.js";
 
+const realConfigPath = join(homedir(), ".omp", "oh-my-pi-zh.json");
+
 test("E2E Pi extension lifecycle and slash command execution", async () => {
+  const initialContent = existsSync(realConfigPath) ? readFileSync(realConfigPath, "utf-8") : null;
+  try {
   const eventHandlers = new Map();
   const commands = new Map();
 
@@ -106,5 +113,39 @@ test("E2E Pi extension lifecycle and slash command execution", async () => {
   const shutdownHooks = eventHandlers.get("session_shutdown");
   for (const hook of shutdownHooks) {
     await hook({}, mockCtx);
+  }
+  } finally {
+    if (initialContent !== null) {
+      writeFileSync(realConfigPath, initialContent, "utf-8");
+    } else if (existsSync(realConfigPath)) {
+      unlinkSync(realConfigPath);
+    }
+  }
+});
+
+test("Config persistence: /zh off persists enabled=false and stays off across restarts", async () => {
+  const { loadConfig, saveUserConfig, getDefaultConfigWritePath } = await import("../dist/index.js");
+  const { readFileSync, existsSync, unlinkSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+
+  const testConfigPath = join(tmpdir(), `test-oh-my-pi-zh-${Date.now()}.json`);
+
+  try {
+    // 1. Save enabled: false to test config path
+    saveUserConfig({ enabled: false }, testConfigPath);
+    assert.ok(existsSync(testConfigPath));
+
+    const content = JSON.parse(readFileSync(testConfigPath, "utf-8"));
+    assert.equal(content.enabled, false);
+
+    // 2. Save enabled: true to test config path
+    saveUserConfig({ enabled: true }, testConfigPath);
+    const contentOn = JSON.parse(readFileSync(testConfigPath, "utf-8"));
+    assert.equal(contentOn.enabled, true);
+  } finally {
+    if (existsSync(testConfigPath)) {
+      unlinkSync(testConfigPath);
+    }
   }
 });

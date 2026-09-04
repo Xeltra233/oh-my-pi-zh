@@ -3,7 +3,7 @@
  *
  * Non-intrusive runtime TUI localization extension for oh-my-pi and Pi CLI.
  */
-import { loadConfig } from "./config/loader.js";
+import { loadConfig, saveUserConfig } from "./config/loader.js";
 import type { OhMyPiZhConfig } from "./config/types.js";
 import { getTuiDictionary } from "./locales/index.js";
 import { TuiTextLocalizer } from "./tui/text-localizer.js";
@@ -32,7 +32,7 @@ export default async function ohMyPiZh(pi: PiExtensionAPI): Promise<void> {
   let config: OhMyPiZhConfig = loadConfig();
   const dict = getTuiDictionary(config.locale, config.customDictionary);
   const localizer = new TuiTextLocalizer(dict);
-  const patcher = new TuiPatcher({ localizer });
+  const patcher = new TuiPatcher({ localizer, enabled: config.enabled });
 
   logger.debug("oh-my-pi-zh TUI extension initializing...");
 
@@ -60,6 +60,11 @@ export default async function ohMyPiZh(pi: PiExtensionAPI): Promise<void> {
             ctx.ui.setStatus("oh-my-pi-zh", "🇨🇳 TUI:中文");
           }
         }
+      } else {
+        patcher.restore();
+        if (ctx?.ui) {
+          ctx.ui.setStatus?.("oh-my-pi-zh", undefined);
+        }
       }
     } catch (err) {
       logger.warn(`Failed in session_start: ${String(err)}`);
@@ -69,7 +74,7 @@ export default async function ohMyPiZh(pi: PiExtensionAPI): Promise<void> {
   // 3. Register markdown transformer for chat UI
   if (typeof pi.registerMarkdownTransformer === "function") {
     pi.registerMarkdownTransformer((markdown, { isStreaming }) => {
-      if (!config.enabled) return markdown;
+      if (!config.enabled || !patcher.isPatched) return markdown;
       if (isStreaming) return markdown;
       return localizer.localizeText(markdown);
     });
@@ -90,6 +95,7 @@ export default async function ohMyPiZh(pi: PiExtensionAPI): Promise<void> {
       switch (sub) {
         case "on": {
           config.enabled = true;
+          saveUserConfig({ enabled: true });
           await patcher.patchPiTui(pi);
           if (ctx?.ui) {
             patcher.wrapExtensionUI(ctx.ui);
@@ -97,17 +103,18 @@ export default async function ohMyPiZh(pi: PiExtensionAPI): Promise<void> {
               ctx.ui.setStatus?.("oh-my-pi-zh", "🇨🇳 TUI:中文");
             }
           }
-          const msg = "✅ oh-my-pi TUI 中文汉化已启用";
+          const msg = "✅ oh-my-pi TUI 中文汉化已启用（设置已保存，重启生效）";
           ctx?.ui?.notify ? ctx.ui.notify(msg, "info") : console.log(msg);
           break;
         }
         case "off": {
           config.enabled = false;
+          saveUserConfig({ enabled: false });
           patcher.restore();
           if (ctx?.ui) {
             ctx.ui.setStatus?.("oh-my-pi-zh", undefined);
           }
-          const msg = "⚪ oh-my-pi TUI 汉化已停用，恢复英文原生界面";
+          const msg = "⚪ oh-my-pi TUI 汉化已停用，恢复英文原生界面（设置已保存，重启生效）";
           ctx?.ui?.notify ? ctx.ui.notify(msg, "info") : console.log(msg);
           break;
         }
@@ -120,7 +127,7 @@ export default async function ohMyPiZh(pi: PiExtensionAPI): Promise<void> {
             `- **状态栏指示器**: ${config.features.statusIndicator ? "已激活" : "未激活"}`,
             `- **Markdown 变换器**: ${typeof pi.registerMarkdownTransformer === "function" ? "已就绪" : "未提供"}`,
             "",
-            "💡 提示：可通过 `/zh on` 或 `/zh off` 随时无缝切换中英文终端界面。"
+            "💡 提示：可通过 `/zh on` 或 `/zh off` 随时无缝切换中英文终端界面，切换后状态会自动持久化保存。"
           ];
           const report = lines.join("\n");
           ctx?.ui?.notify ? ctx.ui.notify(report, "info") : console.log(report);
@@ -138,8 +145,8 @@ export default async function ohMyPiZh(pi: PiExtensionAPI): Promise<void> {
     const getArgumentCompletions = async (prefix: string) => {
       const subcommands = [
         { value: "status", label: "status", description: "查看当前终端 TUI 汉化状态" },
-        { value: "on", label: "on", description: "立即启用终端 TUI 中文汉化" },
-        { value: "off", label: "off", description: "停用汉化并恢复英文原生界面" },
+        { value: "on", label: "on", description: "立即启用终端 TUI 中文汉化（持久化保存）" },
+        { value: "off", label: "off", description: "停用汉化并恢复英文原生界面（持久化保存）" },
         { value: "doctor", label: "doctor", description: "执行 TUI 汉化诊断与体检" }
       ];
       const p = (prefix || "").toLowerCase().trim();
