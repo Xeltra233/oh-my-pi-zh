@@ -9,6 +9,9 @@ const realConfigPath = join(homedir(), ".omp", "oh-my-pi-zh.json");
 
 test("E2E Pi extension lifecycle and slash command execution", async () => {
   const initialContent = existsSync(realConfigPath) ? readFileSync(realConfigPath, "utf-8") : null;
+  if (initialContent !== null) {
+    unlinkSync(realConfigPath);
+  }
   try {
   const eventHandlers = new Map();
   const commands = new Map();

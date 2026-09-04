@@ -214,7 +214,7 @@ switch (command) {
     const dir = dirname(configPath);
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
     writeFileSync(configPath, JSON.stringify(current, null, 2) + "\n", "utf-8");
-    console.log(`✅ 已启用 oh-my-pi-zh 汉化，配置已写入: ${configPath}`);
+    console.log("✅ TUI 中文汉化已启用");
     break;
   }
 
@@ -231,7 +231,7 @@ switch (command) {
     const dir = dirname(configPath);
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
     writeFileSync(configPath, JSON.stringify(current, null, 2) + "\n", "utf-8");
-    console.log(`⚪ 已停用 oh-my-pi-zh 汉化并恢复英文原生界面，配置已写入: ${configPath}`);
+    console.log("⚪ TUI 汉化已停用");
     break;
   }
 

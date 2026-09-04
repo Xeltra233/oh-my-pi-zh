@@ -103,7 +103,7 @@ export default async function ohMyPiZh(pi: PiExtensionAPI): Promise<void> {
               ctx.ui.setStatus?.("oh-my-pi-zh", "🇨🇳 TUI:中文");
             }
           }
-          const msg = "✅ oh-my-pi TUI 中文汉化已启用（设置已保存，重启生效）";
+          const msg = "✅ TUI 中文汉化已启用";
           ctx?.ui?.notify ? ctx.ui.notify(msg, "info") : console.log(msg);
           break;
         }
@@ -114,7 +114,7 @@ export default async function ohMyPiZh(pi: PiExtensionAPI): Promise<void> {
           if (ctx?.ui) {
             ctx.ui.setStatus?.("oh-my-pi-zh", undefined);
           }
-          const msg = "⚪ oh-my-pi TUI 汉化已停用，恢复英文原生界面（设置已保存，重启生效）";
+          const msg = "⚪ TUI 汉化已停用";
           ctx?.ui?.notify ? ctx.ui.notify(msg, "info") : console.log(msg);
           break;
         }

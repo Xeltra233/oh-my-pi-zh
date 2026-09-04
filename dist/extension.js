@@ -172,7 +172,7 @@ function saveUserConfig(updates, targetPath) {
       } : {}
     };
     writeFileSync(filePath, JSON.stringify(nextConfig, null, 2) + "\n", "utf-8");
-    logger.info(`Persisted user config to ${filePath}`);
+    logger.debug(`Persisted user config to ${filePath}`);
     return true;
   } catch (err) {
     logger.warn(`Failed to save config: ${String(err)}`);
@@ -1217,7 +1217,7 @@ async function ohMyPiZh(pi) {
               ctx.ui.setStatus?.("oh-my-pi-zh", "\u{1F1E8}\u{1F1F3} TUI:\u4E2D\u6587");
             }
           }
-          const msg = "\u2705 oh-my-pi TUI \u4E2D\u6587\u6C49\u5316\u5DF2\u542F\u7528\uFF08\u8BBE\u7F6E\u5DF2\u4FDD\u5B58\uFF0C\u91CD\u542F\u751F\u6548\uFF09";
+          const msg = "\u2705 TUI \u4E2D\u6587\u6C49\u5316\u5DF2\u542F\u7528";
           ctx?.ui?.notify ? ctx.ui.notify(msg, "info") : console.log(msg);
           break;
         }
@@ -1228,7 +1228,7 @@ async function ohMyPiZh(pi) {
           if (ctx?.ui) {
             ctx.ui.setStatus?.("oh-my-pi-zh", void 0);
           }
-          const msg = "\u26AA oh-my-pi TUI \u6C49\u5316\u5DF2\u505C\u7528\uFF0C\u6062\u590D\u82F1\u6587\u539F\u751F\u754C\u9762\uFF08\u8BBE\u7F6E\u5DF2\u4FDD\u5B58\uFF0C\u91CD\u542F\u751F\u6548\uFF09";
+          const msg = "\u26AA TUI \u6C49\u5316\u5DF2\u505C\u7528";
           ctx?.ui?.notify ? ctx.ui.notify(msg, "info") : console.log(msg);
           break;
         }

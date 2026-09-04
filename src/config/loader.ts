@@ -92,7 +92,7 @@ export function saveUserConfig(updates: Partial<OhMyPiZhConfig>, targetPath?: st
     };
 
     writeFileSync(filePath, JSON.stringify(nextConfig, null, 2) + "\n", "utf-8");
-    logger.info(`Persisted user config to ${filePath}`);
+    logger.debug(`Persisted user config to ${filePath}`);
     return true;
   } catch (err) {
     logger.warn(`Failed to save config: ${String(err)}`);
