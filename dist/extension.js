@@ -733,8 +733,9 @@ var TuiTextLocalizer = class {
 // src/tui/patcher.ts
 var TuiPatcher = class {
   localizer;
-  isPatched = false;
+  isPatched = true;
   originalMethods = /* @__PURE__ */ new Map();
+  trackedAutocompleteItems = /* @__PURE__ */ new Set();
   constructor(options) {
     this.localizer = options.localizer;
   }
@@ -745,9 +746,10 @@ var TuiPatcher = class {
    * 3. Fallback dynamic imports for standalone / test environments
    */
   async patchPiTui(api) {
-    if (this.isPatched) return true;
-    let patchedAny = false;
+    const patcherRef = this;
     const localizer = this.localizer;
+    this.isPatched = true;
+    let patchedAny = false;
     try {
       if (api?.pi) {
         const hostPi = api.pi;
@@ -756,6 +758,7 @@ var TuiPatcher = class {
           const origWelcomeRender = hostPi.WelcomeComponent.prototype.render;
           hostPi.WelcomeComponent.prototype.render = function(termWidth) {
             const lines = origWelcomeRender.call(this, termWidth);
+            if (!patcherRef.isPatched) return lines;
             return localizer.localizeLines(lines);
           };
           patchedAny = true;
@@ -764,6 +767,7 @@ var TuiPatcher = class {
           this.saveOriginal(hostPi, "renderWelcomeTip");
           const origTip = hostPi.renderWelcomeTip;
           hostPi.renderWelcomeTip = function(tip, boxWidth, phase = 0) {
+            if (!patcherRef.isPatched) return origTip.call(this, tip, boxWidth, phase);
             const localizedTip = localizer.localizeText(tip);
             return origTip.call(this, localizedTip, boxWidth, phase);
           };
@@ -774,6 +778,7 @@ var TuiPatcher = class {
           const origTextRender = hostPi.Text.prototype.render;
           hostPi.Text.prototype.render = function(width) {
             const lines = origTextRender.call(this, width);
+            if (!patcherRef.isPatched) return lines;
             return localizer.localizeLines(lines);
           };
           patchedAny = true;
@@ -783,6 +788,7 @@ var TuiPatcher = class {
           const origLoader = hostPi.BorderedLoader.prototype.render;
           hostPi.BorderedLoader.prototype.render = function(width) {
             const lines = origLoader.call(this, width);
+            if (!patcherRef.isPatched) return lines;
             return localizer.localizeLines(lines);
           };
           patchedAny = true;
@@ -800,7 +806,15 @@ var TuiPatcher = class {
                   if (result && Array.isArray(result.items)) {
                     for (const item of result.items) {
                       if (item && typeof item.description === "string") {
-                        item.description = localizer.localizeText(item.description);
+                        if (item._rawDescription === void 0) {
+                          item._rawDescription = item.description;
+                        }
+                        patcherRef.trackedAutocompleteItems.add(item);
+                        if (patcherRef.isPatched) {
+                          item.description = localizer.localizeText(item._rawDescription);
+                        } else {
+                          item.description = item._rawDescription;
+                        }
                       }
                     }
                   }
@@ -821,7 +835,6 @@ var TuiPatcher = class {
       if (typeof process?.stdout?.write === "function" && !this.hasOriginal(process.stdout, "write")) {
         this.saveOriginal(process.stdout, "write");
         const origStdoutWrite = process.stdout.write.bind(process.stdout);
-        const patcherRef = this;
         process.stdout.write = function(chunk, encodingOrCallback, callback) {
           if (!patcherRef.isPatched) {
             return origStdoutWrite(chunk, encodingOrCallback, callback);
@@ -847,7 +860,6 @@ var TuiPatcher = class {
       if (typeof process?.stderr?.write === "function" && !this.hasOriginal(process.stderr, "write")) {
         this.saveOriginal(process.stderr, "write");
         const origStderrWrite = process.stderr.write.bind(process.stderr);
-        const patcherRef = this;
         process.stderr.write = function(chunk, encodingOrCallback, callback) {
           if (!patcherRef.isPatched) {
             return origStderrWrite(chunk, encodingOrCallback, callback);
@@ -889,6 +901,7 @@ var TuiPatcher = class {
           const origRender = piTui.Text.prototype.render;
           piTui.Text.prototype.render = function(width) {
             const lines = origRender.call(this, width);
+            if (!patcherRef.isPatched) return lines;
             return localizer.localizeLines(lines);
           };
           patchedAny = true;
@@ -901,11 +914,20 @@ var TuiPatcher = class {
             if (Array.isArray(items)) {
               for (const item of items) {
                 if (item && typeof item.description === "string") {
-                  item.description = localizer.localizeText(item.description);
+                  if (item._rawDescription === void 0) {
+                    item._rawDescription = item.description;
+                  }
+                  patcherRef.trackedAutocompleteItems.add(item);
+                  if (patcherRef.isPatched) {
+                    item.description = localizer.localizeText(item._rawDescription);
+                  } else {
+                    item.description = item._rawDescription;
+                  }
                 }
               }
             }
             const lines = origSelectRender.call(this, width);
+            if (!patcherRef.isPatched) return lines;
             return localizer.localizeLines(lines);
           };
           patchedAny = true;
@@ -918,7 +940,15 @@ var TuiPatcher = class {
             if (result && Array.isArray(result.items)) {
               for (const item of result.items) {
                 if (item && typeof item.description === "string") {
-                  item.description = localizer.localizeText(item.description);
+                  if (item._rawDescription === void 0) {
+                    item._rawDescription = item.description;
+                  }
+                  patcherRef.trackedAutocompleteItems.add(item);
+                  if (patcherRef.isPatched) {
+                    item.description = localizer.localizeText(item._rawDescription);
+                  } else {
+                    item.description = item._rawDescription;
+                  }
                 }
               }
             }
@@ -931,6 +961,7 @@ var TuiPatcher = class {
           const origSettingsRender = piTui.SettingsList.prototype.renderMainList;
           piTui.SettingsList.prototype.renderMainList = function(width) {
             const lines = origSettingsRender.call(this, width);
+            if (!patcherRef.isPatched) return lines;
             return localizer.localizeLines(lines);
           };
           patchedAny = true;
@@ -940,7 +971,6 @@ var TuiPatcher = class {
     } catch (err) {
       logger.warn(`Failed fallback patching pi-tui: ${String(err)}`);
     }
-    this.isPatched = patchedAny;
     return patchedAny;
   }
   /**
@@ -948,11 +978,12 @@ var TuiPatcher = class {
    */
   wrapExtensionUI(ui) {
     if (!ui) return;
+    const patcherRef = this;
     if (typeof ui.setStatus === "function") {
       const origSetStatus = ui.setStatus.bind(ui);
       ui.setStatus = (key, text) => {
-        if (text === void 0) {
-          return origSetStatus(key);
+        if (!patcherRef.isPatched || text === void 0) {
+          return origSetStatus(key, text);
         }
         const localized = this.localizer.localizeText(text);
         return origSetStatus(key, localized);
@@ -961,7 +992,7 @@ var TuiPatcher = class {
     if (typeof ui.setWorkingMessage === "function") {
       const origWorking = ui.setWorkingMessage.bind(ui);
       ui.setWorkingMessage = (message) => {
-        if (!message) return origWorking();
+        if (!patcherRef.isPatched || !message) return origWorking(message);
         const localized = this.localizer.localizeText(message);
         return origWorking(localized);
       };
@@ -969,6 +1000,9 @@ var TuiPatcher = class {
     if (typeof ui.select === "function") {
       const origSelect = ui.select.bind(ui);
       ui.select = async (title, options, opts) => {
+        if (!patcherRef.isPatched) {
+          return origSelect(title, options, opts);
+        }
         const localizedTitle = this.localizer.localizeText(title);
         const localizedOptions = options.map((opt) => ({
           ...opt,
@@ -981,6 +1015,9 @@ var TuiPatcher = class {
     if (typeof ui.multiSelect === "function") {
       const origMulti = ui.multiSelect.bind(ui);
       ui.multiSelect = async (title, options, opts) => {
+        if (!patcherRef.isPatched) {
+          return origMulti(title, options, opts);
+        }
         const localizedTitle = this.localizer.localizeText(title);
         const localizedOptions = options.map((opt) => ({
           ...opt,
@@ -993,6 +1030,9 @@ var TuiPatcher = class {
     if (typeof ui.confirm === "function") {
       const origConfirm = ui.confirm.bind(ui);
       ui.confirm = async (title, message, opts) => {
+        if (!patcherRef.isPatched) {
+          return origConfirm(title, message, opts);
+        }
         const localizedTitle = this.localizer.localizeText(title);
         const localizedMessage = this.localizer.localizeText(message);
         return origConfirm(localizedTitle, localizedMessage, opts);
@@ -1001,6 +1041,9 @@ var TuiPatcher = class {
     if (typeof ui.input === "function") {
       const origInput = ui.input.bind(ui);
       ui.input = async (title, placeholder, opts) => {
+        if (!patcherRef.isPatched) {
+          return origInput(title, placeholder, opts);
+        }
         const localizedTitle = this.localizer.localizeText(title);
         const localizedPlaceholder = placeholder ? this.localizer.localizeText(placeholder) : placeholder;
         return origInput(localizedTitle, localizedPlaceholder, opts);
@@ -1009,6 +1052,9 @@ var TuiPatcher = class {
     if (typeof ui.notify === "function") {
       const origNotify = ui.notify.bind(ui);
       ui.notify = (message, type) => {
+        if (!patcherRef.isPatched) {
+          return origNotify(message, type);
+        }
         const localizedMsg = this.localizer.localizeText(message);
         return origNotify(localizedMsg, type);
       };
@@ -1018,13 +1064,19 @@ var TuiPatcher = class {
    * Restore original methods (for unpatching/testing)
    */
   restore() {
+    this.isPatched = false;
+    for (const item of this.trackedAutocompleteItems) {
+      if (item && item._rawDescription !== void 0) {
+        item.description = item._rawDescription;
+      }
+    }
+    this.trackedAutocompleteItems.clear();
     for (const [target, methods] of this.originalMethods.entries()) {
       for (const [prop, orig] of methods.entries()) {
         target[prop] = orig;
       }
     }
     this.originalMethods.clear();
-    this.isPatched = false;
   }
   hasOriginal(target, prop) {
     return Boolean(this.originalMethods.get(target)?.has(prop));

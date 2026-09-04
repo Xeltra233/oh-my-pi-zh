@@ -132,3 +132,51 @@ test("TuiPatcher patches ProcessTerminal write safety net", async () => {
   assert.ok(captured.includes("小提示"));
   assert.ok(captured.includes("提示：按 Shift+Tab 快速循环切换思考推理强度等级"));
 });
+
+test("TuiPatcher restore() fully restores autocomplete descriptions and methods to English", async () => {
+  const dict = getTuiDictionary("zh-CN");
+  const localizer = new TuiTextLocalizer(dict);
+  const patcher = new TuiPatcher({ localizer });
+
+  class MockEditorClass {
+    setAutocompleteProvider(provider) {
+      this.provider = provider;
+    }
+  }
+
+  class MockCustomEditor extends MockEditorClass {}
+  const mockApi = {
+    pi: {
+      CustomEditor: MockCustomEditor
+    }
+  };
+
+  await patcher.patchPiTui(mockApi);
+
+  const mockProvider = {
+    async getSuggestions(prefix) {
+      return {
+        items: [
+          { value: "switch", description: "Model: none selected" },
+          { value: "cleanse", description: "Detect and fix project diagnostics with weighted parallel subagents" }
+        ]
+      };
+    }
+  };
+
+  MockEditorClass.prototype.setAutocompleteProvider.call(new MockCustomEditor(), mockProvider);
+
+  // 1. When enabled, descriptions should be localized
+  const resZh = await mockProvider.getSuggestions("/");
+  assert.equal(resZh.items[0].description, "模型：未选择");
+  assert.equal(resZh.items[1].description, "使用加权并行子代理检测并修复项目诊断报错");
+
+  // 2. When disabled via restore(), descriptions must revert to English!
+  patcher.restore();
+  assert.equal(resZh.items[0].description, "Model: none selected");
+  assert.equal(resZh.items[1].description, "Detect and fix project diagnostics with weighted parallel subagents");
+
+  const resEn = await mockProvider.getSuggestions("/");
+  assert.equal(resEn.items[0].description, "Model: none selected");
+  assert.equal(resEn.items[1].description, "Detect and fix project diagnostics with weighted parallel subagents");
+});
