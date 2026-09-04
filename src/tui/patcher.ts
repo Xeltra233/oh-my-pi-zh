@@ -23,16 +23,21 @@ export class TuiPatcher {
     try {
       let piTui: any = null;
 
-      // 1. Try standard import (works in Pi CLI runtime via jiti virtualModules)
+      // 1. Try @oh-my-pi/pi-tui (oh-my-pi runtime)
       try {
-        piTui = await import("@earendil-works/pi-tui");
+        piTui = await import("@oh-my-pi/pi-tui");
       } catch {
-        // 2. Try global node_modules fallback for development/testing
+        // 2. Try @earendil-works/pi-tui (standard Pi runtime)
         try {
-          const globalTuiPath = "file:///C:/Users/Xeltra/AppData/Roaming/npm/node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-tui/dist/index.js";
-          piTui = await import(globalTuiPath);
+          piTui = await import("@earendil-works/pi-tui");
         } catch {
-          // pi-tui not found
+          // 3. Try global node_modules fallback for development/testing
+          try {
+            const globalTuiPath = "file:///C:/Users/Xeltra/AppData/Roaming/npm/node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-tui/dist/index.js";
+            piTui = await import(globalTuiPath);
+          } catch {
+            // pi-tui not found
+          }
         }
       }
 

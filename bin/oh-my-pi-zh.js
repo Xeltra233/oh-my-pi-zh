@@ -9,6 +9,18 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const pkgRoot = resolve(__dirname, "..");
 
+function hasCommand(cmd) {
+  try {
+    execSync(`${cmd} --version`, { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const hasOmp = hasCommand("omp");
+const hasPi = hasCommand("pi");
+
 function getSettingsPath(isProject = false) {
   if (isProject) {
     return join(process.cwd(), ".pi", "settings.json");
@@ -16,130 +28,162 @@ function getSettingsPath(isProject = false) {
   return join(homedir(), ".pi", "agent", "settings.json");
 }
 
-function loadSettings(settingsPath) {
-  if (!existsSync(settingsPath)) {
-    return { packages: [] };
-  }
-  try {
-    const content = readFileSync(settingsPath, "utf-8");
-    return JSON.parse(content);
-  } catch (err) {
-    console.error(`❌ 解析配置文件失败: ${settingsPath} (${err.message})`);
-    process.exit(1);
-  }
+function getOmpPluginsPath() {
+  return join(homedir(), ".omp", "plugins", "package.json");
 }
 
-function saveSettings(settingsPath, data) {
-  const dir = dirname(settingsPath);
-  if (!existsSync(dir)) {
-    console.error(`❌ 目录不存在: ${dir}`);
-    process.exit(1);
+function loadJson(path) {
+  if (!existsSync(path)) return null;
+  try {
+    return JSON.parse(readFileSync(path, "utf-8"));
+  } catch {
+    return null;
   }
-  // Create backup
-  if (existsSync(settingsPath)) {
-    const backupPath = `${settingsPath}.bak.${Date.now()}`;
-    copyFileSync(settingsPath, backupPath);
-  }
-  writeFileSync(settingsPath, JSON.stringify(data, null, 2) + "\n", "utf-8");
 }
 
 const args = process.argv.slice(2);
 const command = args[0] || "help";
 const isProject = args.includes("-l") || args.includes("--project");
 const settingsPath = getSettingsPath(isProject);
+const ompPluginsPath = getOmpPluginsPath();
 
 switch (command) {
   case "install": {
-    console.log("🇨🇳 正在执行 oh-my-pi-zh 插件安装...");
+    console.log("🇨🇳 正在执行 oh-my-pi-zh 终端 TUI 汉化插件安装...");
     const targetSpec = args[1] && !args[1].startsWith("-")
       ? args[1]
-      : (existsSync(join(pkgRoot, "package.json")) ? pkgRoot.replace(/\\/g, "/") : "git:github.com/Xeltra233/oh-my-pi-zh");
+      : "github:Xeltra233/oh-my-pi-zh";
 
-    // Try pi install first if pi command is available
-    let piSucceeded = false;
-    try {
-      console.log(`📡 尝试使用 pi CLI 原生命令安装: pi install ${targetSpec}`);
-      execSync(`pi install ${isProject ? "-l " : ""}"${targetSpec}"`, { stdio: "inherit" });
-      piSucceeded = true;
-    } catch {
-      console.log("⚠️ pi CLI 命令未直接响应，转为直接配置 settings.json...");
+    let installed = false;
+
+    // 1. Prioritize omp CLI
+    if (hasOmp) {
+      try {
+        console.log(`📡 检测到 Oh My Pi (omp)，执行: omp install ${targetSpec}`);
+        execSync(`omp install "${targetSpec}"`, { stdio: "inherit" });
+        installed = true;
+      } catch (err) {
+        console.warn(`⚠️ omp install 失败 (${err.message})，尝试备用方式...`);
+      }
     }
 
-    if (!piSucceeded) {
-      const settings = loadSettings(settingsPath);
+    // 2. Fallback to pi CLI
+    if (!installed && hasPi) {
+      try {
+        console.log(`📡 尝试使用 pi install 命令: pi install ${isProject ? "-l " : ""}${targetSpec}`);
+        execSync(`pi install ${isProject ? "-l " : ""}"${targetSpec}"`, { stdio: "inherit" });
+        installed = true;
+      } catch {
+        // Continue to config fallback
+      }
+    }
+
+    // 3. Fallback to direct settings.json edit
+    if (!installed) {
+      const settings = loadJson(settingsPath) || { packages: [] };
       if (!Array.isArray(settings.packages)) {
         settings.packages = [];
       }
 
-      const existingIndex = settings.packages.findIndex((p) => {
+      const existsIdx = settings.packages.findIndex((p) => {
         if (typeof p === "string") return p.includes("oh-my-pi-zh");
         if (p && typeof p === "object" && p.source) return p.source.includes("oh-my-pi-zh");
         return false;
       });
 
-      if (existingIndex >= 0) {
-        settings.packages[existingIndex] = targetSpec;
-        console.log(`🔄 更新已有插件项: ${targetSpec}`);
+      if (existsIdx >= 0) {
+        settings.packages[existsIdx] = targetSpec;
       } else {
         settings.packages.push(targetSpec);
-        console.log(`➕ 添加新插件项: ${targetSpec}`);
       }
 
-      saveSettings(settingsPath, settings);
-      console.log(`✅ 配置文件已更新: ${settingsPath}`);
+      const dir = dirname(settingsPath);
+      if (existsSync(dir)) {
+        writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + "\n", "utf-8");
+        console.log(`✅ 已写入设置文件: ${settingsPath}`);
+        installed = true;
+      }
     }
 
-    console.log("\n🎉 安装完成！在 Pi 会话中即可享受全中文 TUI 交互界面。");
+    if (installed) {
+      console.log("\n🎉 安装成功！启动 omp (Oh My Pi) 即可直接享受中文 TUI 交互界面。");
+    } else {
+      console.error("\n❌ 安装失败，请检查 omp 环境。");
+      process.exit(1);
+    }
     break;
   }
 
   case "remove":
   case "uninstall": {
     console.log("🗑️  正在卸载 oh-my-pi-zh 插件...");
-    let piSucceeded = false;
-    try {
-      console.log("📡 尝试使用 pi CLI 原生命令卸载: pi remove oh-my-pi-zh");
-      execSync(`pi remove ${isProject ? "-l " : ""}oh-my-pi-zh`, { stdio: "inherit" });
-      piSucceeded = true;
-    } catch {
-      // Fallback
+    let removed = false;
+
+    // 1. OMP CLI
+    if (hasOmp) {
+      try {
+        console.log("📡 执行 omp plugin uninstall oh-my-pi-zh...");
+        execSync("omp plugin uninstall oh-my-pi-zh", { stdio: "inherit" });
+        removed = true;
+      } catch {
+        // Fallback
+      }
     }
 
-    const settings = loadSettings(settingsPath);
-    if (Array.isArray(settings.packages)) {
-      const initialLen = settings.packages.length;
+    // 2. Pi CLI
+    if (hasPi) {
+      try {
+        execSync(`pi remove ${isProject ? "-l " : ""}oh-my-pi-zh`, { stdio: "ignore" });
+        removed = true;
+      } catch {
+        // Ignore
+      }
+    }
+
+    // 3. Clean settings.json if exists
+    const settings = loadJson(settingsPath);
+    if (settings && Array.isArray(settings.packages)) {
+      const initLen = settings.packages.length;
       settings.packages = settings.packages.filter((p) => {
         if (typeof p === "string") return !p.includes("oh-my-pi-zh");
         if (p && typeof p === "object" && p.source) return !p.source.includes("oh-my-pi-zh");
         return true;
       });
-
-      if (settings.packages.length !== initialLen) {
-        saveSettings(settingsPath, settings);
-        console.log(`✅ 已从 ${settingsPath} 中移除插件。`);
-      } else if (!piSucceeded) {
-        console.log(`ℹ️  配置文件中未找到 oh-my-pi-zh 项。`);
+      if (settings.packages.length !== initLen) {
+        writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + "\n", "utf-8");
+        console.log(`✅ 已从 ${settingsPath} 中移除注册项。`);
+        removed = true;
       }
     }
-    console.log("🎉 卸载完成，Pi 已恢复英文原生界面。");
+
+    console.log("🎉 卸载完成，已恢复英文原生界面。");
     break;
   }
 
   case "status": {
-    console.log(`🔍 正在检查 oh-my-pi-zh 安装状态 (${settingsPath})...`);
-    const settings = loadSettings(settingsPath);
-    const item = Array.isArray(settings.packages)
-      ? settings.packages.find((p) => {
-          if (typeof p === "string") return p.includes("oh-my-pi-zh");
-          if (p && typeof p === "object" && p.source) return p.source.includes("oh-my-pi-zh");
-          return false;
-        })
+    console.log("🔍 正在检查 oh-my-pi-zh 安装状态...");
+    let isFound = false;
+
+    // Check omp plugins
+    const ompPkg = loadJson(ompPluginsPath);
+    if (ompPkg?.dependencies?.["oh-my-pi-zh"]) {
+      console.log(`✅ OMP 插件已安装: ${ompPkg.dependencies["oh-my-pi-zh"]}`);
+      isFound = true;
+    }
+
+    // Check pi settings
+    const settings = loadJson(settingsPath);
+    const item = Array.isArray(settings?.packages)
+      ? settings.packages.find((p) => (typeof p === "string" ? p.includes("oh-my-pi-zh") : p?.source?.includes("oh-my-pi-zh")))
       : null;
 
     if (item) {
-      console.log(`✅ 已安装: ${typeof item === "string" ? item : JSON.stringify(item)}`);
-    } else {
-      console.log("⚪ 未在配置文件中检测到 oh-my-pi-zh 注册项。");
+      console.log(`✅ Pi 配置已注册: ${typeof item === "string" ? item : item.source}`);
+      isFound = true;
+    }
+
+    if (!isFound) {
+      console.log("⚪ 未检测到 oh-my-pi-zh 安装或注册项（系统当前保持纯净原生状态）。");
     }
     break;
   }
@@ -147,23 +191,13 @@ switch (command) {
   case "doctor": {
     console.log("🩺 oh-my-pi-zh 诊断体检报告:");
     console.log(`- Node 版本: ${process.version}`);
-    console.log(`- 插件根目录: ${pkgRoot}`);
-    console.log(`- 配置文件路径: ${settingsPath} (${existsSync(settingsPath) ? "存在" : "不存在"})`);
+    console.log(`- Oh My Pi (omp) CLI: ${hasOmp ? "✅ 存在可用" : "⚪ 未在 PATH 中检测到"}`);
+    console.log(`- Pi CLI: ${hasPi ? "✅ 存在可用" : "⚪ 未在 PATH 中检测到"}`);
+    console.log(`- OMP 插件清单: ${existsSync(ompPluginsPath) ? "✅ 存在 (" + ompPluginsPath + ")" : "⚪ 未找到"}`);
 
-    let hasPi = false;
-    try {
-      execSync("pi --version", { stdio: "ignore" });
-      hasPi = true;
-    } catch {
-      hasPi = false;
-    }
-    console.log(`- Pi CLI 可执行性: ${hasPi ? "✅ 正常" : "⚠️ 未在系统 PATH 中检测到 pi 命令"}`);
-
-    const settings = loadSettings(settingsPath);
-    const item = Array.isArray(settings.packages)
-      ? settings.packages.find((p) => (typeof p === "string" ? p.includes("oh-my-pi-zh") : p?.source?.includes("oh-my-pi-zh")))
-      : null;
-    console.log(`- 插件安装注册: ${item ? `✅ 已注册 (${typeof item === "string" ? item : item.source})` : "⚪ 未注册"}`);
+    const ompPkg = loadJson(ompPluginsPath);
+    const isInstalledInOmp = Boolean(ompPkg?.dependencies?.["oh-my-pi-zh"]);
+    console.log(`- OMP 中安装状态: ${isInstalledInOmp ? "✅ 已安装" : "⚪ 未安装"}`);
     break;
   }
 
@@ -176,13 +210,10 @@ oh-my-pi-zh CLI 命令行管理工具
   oh-my-pi-zh <command> [options]
 
 常用命令:
-  install [source]    安装/注册插件 (可选: 本地路径 / git:github.com/... / npm:...)
-  remove              卸载/注销插件并恢复英文原生界面
+  install [source]    为 Oh My Pi (omp) 安装本插件
+  remove              从 Oh My Pi 卸载本插件并恢复英文原生界面
   status              查看当前安装状态
-  doctor              运行环境与配置体检诊断
-
-常用选项:
-  -l, --project       对当前项目本地配置 (.pi/settings.json) 生效，默认为全局用户配置
+  doctor              运行环境与配置健康体检诊断
 `);
     break;
   }

@@ -1,7 +1,7 @@
 {
   "name": "oh-my-pi-zh",
   "version": "0.1.0",
-  "description": "Chinese localization extension for oh-my-pi — non-intrusive runtime localization for Pi CLI coding agent",
+  "description": "Chinese TUI localization plugin for oh-my-pi (omp) — non-intrusive runtime UI localization",
   "license": "MIT",
   "author": "Xeltra233",
   "type": "module",
@@ -20,23 +20,47 @@
     "url": "git+https://github.com/Xeltra233/oh-my-pi-zh.git"
   },
   "keywords": [
-    "pi-package",
-    "pi",
-    "pi-agent",
-    "coding-agent",
+    "omp-package",
+    "omp-plugin",
+    "omp-extension",
+    "omp",
     "oh-my-pi",
+    "pi-package",
+    "pi-extension",
+    "pi",
+    "coding-agent",
     "chinese",
     "i18n",
     "localization",
-    "omp"
+    "tui"
   ],
+  "omp": {
+    "extensions": [
+      "./dist/extension.js"
+    ]
+  },
   "pi": {
     "extensions": [
       "./dist/extension.js"
     ]
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": ">=0.74.0"
+    "@oh-my-pi/pi-coding-agent": ">=18.0.0",
+    "@oh-my-pi/pi-tui": ">=18.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@oh-my-pi/pi-coding-agent": {
+      "optional": true
+    },
+    "@oh-my-pi/pi-tui": {
+      "optional": true
+    },
+    "@earendil-works/pi-coding-agent": {
+      "optional": true
+    },
+    "@earendil-works/pi-tui": {
+      "optional": true
+    }
   },
   "scripts": {
     "build": "node scripts/build.js",

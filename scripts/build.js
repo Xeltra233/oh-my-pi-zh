@@ -8,8 +8,8 @@ const __dirname = dirname(__filename);
 const root = join(__dirname, "..");
 
 console.log("🔨 Building oh-my-pi-zh with esbuild...");
-const cmd1 = `npx -y esbuild "${join(root, "src/extension.ts")}" --bundle --platform=node --target=node22 --format=esm --outfile="${join(root, "dist/extension.js")}" --external:@earendil-works/*`;
-const cmd2 = `npx -y esbuild "${join(root, "src/index.ts")}" --bundle --platform=node --target=node22 --format=esm --outfile="${join(root, "dist/index.js")}" --external:@earendil-works/*`;
+const cmd1 = `npx -y esbuild "${join(root, "src/extension.ts")}" --bundle --platform=node --target=node22 --format=esm --outfile="${join(root, "dist/extension.js")}" --external:@oh-my-pi/* --external:@earendil-works/*`;
+const cmd2 = `npx -y esbuild "${join(root, "src/index.ts")}" --bundle --platform=node --target=node22 --format=esm --outfile="${join(root, "dist/index.js")}" --external:@oh-my-pi/* --external:@earendil-works/*`;
 
 execSync(cmd1, { stdio: "inherit" });
 execSync(cmd2, { stdio: "inherit" });
