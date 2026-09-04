@@ -1,0 +1,54 @@
+{
+  "name": "oh-my-pi-zh",
+  "version": "0.1.0",
+  "description": "Chinese localization extension for oh-my-pi — non-intrusive runtime localization for Pi CLI coding agent",
+  "license": "MIT",
+  "author": "Xeltra233",
+  "type": "module",
+  "main": "./dist/extension.js",
+  "bin": {
+    "oh-my-pi-zh": "./bin/oh-my-pi-zh.js"
+  },
+  "files": [
+    "dist/",
+    "skills/",
+    "prompts/",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Xeltra233/oh-my-pi-zh.git"
+  },
+  "keywords": [
+    "pi",
+    "pi-agent",
+    "coding-agent",
+    "oh-my-pi",
+    "chinese",
+    "i18n",
+    "localization",
+    "omp"
+  ],
+  "pi": {
+    "extensions": [
+      "./dist/extension.js"
+    ],
+    "skills": [
+      "./skills/"
+    ],
+    "prompts": [
+      "./prompts/"
+    ]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": ">=0.74.0"
+  },
+  "scripts": {
+    "build": "node scripts/build.js",
+    "test": "node --test test/**/*.test.js test/**/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  }
+}
